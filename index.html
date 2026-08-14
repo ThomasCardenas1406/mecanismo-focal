@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mecanismo Focal · Instrumento interactivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void:#0b0c0d;
+    --bg-panel:#141517;
+    --bg-panel-2:#1b1d20;
+    --bg-panel-3:#232628;
+    --line:#2a2c2f;
+    --line-soft:#1c1e21;
+    --text:#eceeef;
+    --text-dim:#8c9194;
+    --text-faint:#5a5e61;
+    --aqua:#3ddbc4;
+    --aqua-soft:rgba(61,219,196,0.12);
+    --aqua-dim:#1c6b60;
+    --teal:#229488;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --disp:'Space Grotesk', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg-void);color:var(--text);font-family:var(--disp);overflow:hidden;height:100%;}
+  ::selection{background:var(--aqua);color:#0b0c0d;}
+
+  .app{position:relative;width:100vw;height:100vh;height:100dvh;overflow:hidden;}
+
+  /* ---------- stage / hero ball ---------- */
+  .stage{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(61,219,196,0.05), transparent 40%),
+      radial-gradient(circle at 82% 85%, rgba(34,148,136,0.05), transparent 40%),
+      var(--bg-void);
+    transition:background 0.5s ease;
+  }
+  .ball-wrap{
+    position:relative;
+    width:min(82vmin,620px);
+    aspect-ratio:1/1;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:none;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #1a1d1f, #0e0f10 72%);
+    border:1px solid var(--line);
+    box-shadow:0 0 0 1px rgba(255,255,255,0.02), 0 30px 60px -20px rgba(0,0,0,0.6);
+    transition:background 0.5s ease, border-color 0.5s ease;
+  }
+  #beachball{width:92%;height:92%;display:block;border-radius:50%;cursor:grab;}
+  #beachball.dragging{cursor:grabbing;filter:brightness(1.035);}
+  .compass-label{position:absolute;font-family:var(--mono);font-size:11px;color:var(--text-faint);pointer-events:none;letter-spacing:.08em;}
+  .cl-n{top:2%;left:50%;transform:translateX(-50%);}
+  .cl-s{bottom:2%;left:50%;transform:translateX(-50%);}
+  .cl-e{right:2%;top:50%;transform:translateY(-50%);}
+  .cl-w{left:2%;top:50%;transform:translateY(-50%);}
+
+  .drag-hint{
+    position:absolute;left:50%;bottom:4%;transform:translateX(-50%);
+    font-family:var(--mono);font-size:10.5px;color:var(--text-faint);
+    text-align:center;white-space:nowrap;letter-spacing:.02em;
+    opacity:1;transition:opacity 0.6s ease;pointer-events:none;
+  }
+  .drag-hint.hidden{opacity:0;}
+
+  /* ---------- beach easter egg ---------- */
+  body.beach-mode .stage{
+    background:linear-gradient(to bottom,
+      #bfe6f2 0%, #bfe6f2 36%,
+      #58c2c9 40%, #159b9e 58%,
+      #ecdca3 61%, #ddc07f 100%);
+  }
+  body.beach-mode .stage::before{
+    content:'';position:absolute;top:9%;right:14%;width:64px;height:64px;border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #fff8dc, #ffe07a 55%, #ffca4d);
+    box-shadow:0 0 46px 12px rgba(255,214,120,0.45);
+  }
+  body.beach-mode .stage::after{
+    content:'';position:absolute;top:18%;left:10%;width:130px;height:34px;border-radius:40px;
+    background:rgba(255,255,255,0.55);filter:blur(2px);
+    box-shadow:70px 22px 0 -6px rgba(255,255,255,0.4);
+  }
+  body.beach-mode .ball-wrap{
+    background:radial-gradient(circle at 35% 28%, rgba(255,255,255,0.18), rgba(255,255,255,0.03) 72%);
+    border-color:rgba(255,255,255,0.4);
+    backdrop-filter:blur(3px);
+  }
+
+  /* ---------- HUD (top-right fixed readout) ---------- */
+  .hud{
+    position:absolute;top:16px;right:16px;z-index:20;
+    background:rgba(20,21,23,0.72);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:8px;
+    padding:12px 14px;min-width:150px;
+    font-family:var(--mono);
+  }
+  .hud-row{display:flex;justify-content:space-between;gap:14px;font-size:12px;color:var(--text-dim);padding:2px 0;}
+  .hud-row b{color:var(--aqua);font-weight:600;font-size:12.5px;}
+  .hud-fault{margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);font-size:12px;color:var(--text);line-height:1.35;}
+
+  /* ---------- menu toggle (top-left) ---------- */
+  .menu-toggle{
+    position:absolute;top:16px;left:16px;z-index:30;
+    width:42px;height:42px;border-radius:8px;
+    background:rgba(20,21,23,0.72);backdrop-filter:blur(10px);
+    border:1px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    cursor:pointer;
+  }
+  .menu-toggle .dot{width:4px;height:4px;border-radius:50%;background:var(--text-dim);transition:background 0.2s;}
+  .menu-toggle:hover .dot{background:var(--aqua);}
+
+  /* ---------- drawer ---------- */
+  .drawer-backdrop{
+    position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:35;
+    opacity:0;pointer-events:none;transition:opacity 0.25s ease;
+  }
+  .drawer-backdrop.open{opacity:1;pointer-events:auto;}
+  .drawer{
+    position:absolute;top:0;left:0;height:100%;width:min(340px,88vw);z-index:40;
+    background:var(--bg-panel);border-right:1px solid var(--line);
+    transform:translateX(-105%);transition:transform 0.28s cubic-bezier(.2,.8,.2,1);
+    overflow-y:auto;
+  }
+  .drawer.open{transform:translateX(0);}
+  .drawer-inner{padding:60px 16px 30px;}
+  .drawer-title{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--aqua);margin-bottom:16px;}
+
+  .panel{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:6px;padding:15px 16px;margin-bottom:12px;}
+  .panel h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);margin:0 0 12px;font-weight:500;}
+
+  .param-row{margin-bottom:15px;}
+  .param-row:last-child{margin-bottom:0;}
+  .param-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .param-name{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);letter-spacing:.06em;}
+  .param-value{font-family:var(--mono);font-size:14px;color:var(--text);}
+  .param-value input{background:none;border:none;color:var(--aqua);font-family:var(--mono);font-size:14px;width:48px;text-align:right;}
+  .param-value input:focus{outline:1px solid var(--aqua-dim);}
+  .param-value .unit{color:var(--text-faint);}
+  input[type=range]{-webkit-appearance:none;width:100%;height:24px;background:transparent;}
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line);border-radius:2px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;margin-top:-6px;width:15px;height:15px;border-radius:50%;background:var(--aqua);border:2px solid var(--bg-void);box-shadow:0 0 0 1px var(--aqua-dim);}
+  input[type=range]::-moz-range-track{height:3px;background:var(--line);border-radius:2px;}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--aqua);border:2px solid var(--bg-void);}
+
+  .gauges{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .gauge{background:var(--bg-panel-3);border:1px solid var(--line);border-radius:6px;padding:10px;text-align:center;}
+  .gauge h4{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--text-faint);text-transform:uppercase;margin:0 0 6px;font-weight:500;}
+  .gauge-svg-wrap{position:relative;width:104px;height:104px;margin:0 auto;touch-action:none;cursor:grab;}
+  .gauge-svg-wrap:active{cursor:grabbing;}
+  .gauge-val{font-family:var(--mono);font-size:13.5px;color:var(--aqua);margin-top:5px;}
+  .gauge-tick{position:absolute;font-family:var(--mono);font-size:7.6px;color:var(--text-faint);pointer-events:none;}
+
+  .preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .preset-btn{font-family:var(--mono);font-size:11px;background:var(--bg-panel-3);border:1px solid var(--line);color:var(--text-dim);padding:9px 8px;border-radius:4px;cursor:pointer;text-align:left;letter-spacing:.01em;transition:border-color .15s, color .15s;}
+  .preset-btn:hover{border-color:var(--aqua-dim);color:var(--text);}
+  .preset-btn.wide{grid-column:1 / -1;}
+
+  .axes-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-family:var(--mono);font-size:12px;}
+  .axis-box{background:var(--bg-panel-3);border:1px solid var(--line);border-radius:4px;padding:8px 10px;}
+  .axis-box .ax-name{color:var(--text-faint);font-size:9.5px;letter-spacing:.1em;margin-bottom:4px;}
+  .axis-box .ax-vals span{display:block;color:var(--text);}
+  .axis-box.p .ax-name{color:var(--aqua);}
+  .axis-box.t .ax-name{color:var(--teal);}
+
+  .mode-toggle{display:flex;gap:8px;margin-bottom:12px;}
+  .mode-btn{flex:1;font-family:var(--mono);font-size:10.5px;padding:8px;border-radius:4px;border:1px solid var(--line);background:var(--bg-panel-3);color:var(--text-dim);cursor:pointer;}
+  .mode-btn.active{border-color:var(--aqua);color:var(--aqua);background:var(--aqua-soft);}
+  .color-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-family:var(--mono);font-size:11.5px;color:var(--text-dim);}
+  .color-row input[type=color]{width:32px;height:22px;border:1px solid var(--line);background:none;border-radius:3px;cursor:pointer;padding:0;}
+  .depth-row{display:none;}
+  .depth-row.show{display:block;}
+  .depth-legend{display:flex;height:9px;border-radius:3px;overflow:hidden;margin-top:8px;}
+  .depth-legend div{flex:1;}
+  .note{font-family:var(--mono);font-size:10.2px;color:var(--text-faint);line-height:1.6;margin-top:9px;}
+
+  .switch-row{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--text-dim);}
+  .switch{position:relative;width:38px;height:21px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch .track{position:absolute;inset:0;background:var(--bg-panel-3);border:1px solid var(--line);border-radius:12px;transition:background .2s;cursor:pointer;}
+  .switch .knob{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--text-faint);transition:transform .2s, background .2s;}
+  .switch input:checked + .track{background:var(--aqua-soft);border-color:var(--aqua-dim);}
+  .switch input:checked + .track .knob{transform:translateX(17px);background:var(--aqua);}
+
+  .actions-row{display:flex;gap:10px;}
+  .btn-dl{flex:1;font-family:var(--mono);font-size:11px;background:var(--bg-panel-3);border:1px solid var(--line);color:var(--text-dim);padding:10px;border-radius:4px;cursor:pointer;}
+  .btn-dl:hover{border-color:var(--teal);color:var(--text);}
+
+  .drawer-footer{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);text-align:center;letter-spacing:.02em;margin-top:6px;line-height:1.6;}
+
+  @media (max-width:520px){
+    .hud{min-width:128px;padding:10px 12px;}
+    .hud-row{font-size:11px;}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <button class="menu-toggle" id="menuToggle" aria-label="Menú">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+  </button>
+
+  <div class="hud" id="hud">
+    <div class="hud-row"><span>STRIKE</span><b id="hudStrike">230°</b></div>
+    <div class="hud-row"><span>DIP</span><b id="hudDip">60°</b></div>
+    <div class="hud-row"><span>RAKE</span><b id="hudRake">90°</b></div>
+    <div class="hud-fault" id="hudFault">—</div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="ball-wrap" id="ballWrap">
+      <span class="compass-label cl-n">N</span>
+      <span class="compass-label cl-s">S</span>
+      <span class="compass-label cl-e">E</span>
+      <span class="compass-label cl-w">W</span>
+      <canvas id="beachball" width="480" height="480"></canvas>
+    </div>
+    <div class="drag-hint" id="dragHint">arrastra cualquier punto para rotar el mecanismo en 3D · como una esfera física</div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-inner">
+      <div class="drawer-title">Mecanismo focal · parámetros</div>
+
+      <div class="panel">
+        <h3>Parámetros de la falla</h3>
+        <div class="param-row">
+          <div class="param-top">
+            <span class="param-name">STRIKE (φ)</span>
+            <span class="param-value"><input type="number" id="strikeNum" min="0" max="360" step="1" value="230"><span class="unit">°</span></span>
+          </div>
+          <input type="range" id="strikeSlider" min="0" max="360" step="1" value="230">
+        </div>
+        <div class="param-row">
+          <div class="param-top">
+            <span class="param-name">DIP (δ)</span>
+            <span class="param-value"><input type="number" id="dipNum" min="0" max="90" step="1" value="60"><span class="unit">°</span></span>
+          </div>
+          <input type="range" id="dipSlider" min="0" max="90" step="1" value="60">
+        </div>
+        <div class="param-row">
+          <div class="param-top">
+            <span class="param-name">RAKE (λ)</span>
+            <span class="param-value"><input type="number" id="rakeNum" min="-180" max="180" step="1" value="90"><span class="unit">°</span></span>
+          </div>
+          <input type="range" id="rakeSlider" min="-180" max="180" step="1" value="90">
+        </div>
+
+        <div class="gauges">
+          <div class="gauge">
+            <h4>Dip</h4>
+            <div class="gauge-svg-wrap" id="dipGauge">
+              <svg viewBox="0 0 120 120" width="104" height="104">
+                <path d="M 60 60 L 108 60 A 48 48 0 0 1 60 12 Z" fill="rgba(61,219,196,0.07)" stroke="none"/>
+                <path d="M 108 60 A 48 48 0 0 1 60 12" fill="none" stroke="#2a2c2f" stroke-width="2"/>
+                <line id="dipHand" x1="60" y1="60" x2="108" y2="60" stroke="#3ddbc4" stroke-width="2.5" stroke-linecap="round"/>
+                <circle id="dipKnob" cx="108" cy="60" r="6" fill="#3ddbc4"/>
+                <circle cx="60" cy="60" r="2.5" fill="#5a5e61"/>
+              </svg>
+              <span class="gauge-tick" style="right:4px;top:48px;">0°</span>
+              <span class="gauge-tick" style="left:47px;top:0px;">90°</span>
+            </div>
+            <div class="gauge-val" id="dipGaugeVal">60°</div>
+          </div>
+          <div class="gauge">
+            <h4>Rake</h4>
+            <div class="gauge-svg-wrap" id="rakeGauge">
+              <svg viewBox="0 0 120 120" width="104" height="104">
+                <circle cx="60" cy="60" r="48" fill="none" stroke="#2a2c2f" stroke-width="2"/>
+                <line id="rakeHand" x1="60" y1="60" x2="108" y2="60" stroke="#229488" stroke-width="2.5" stroke-linecap="round"/>
+                <circle id="rakeKnob" cx="108" cy="60" r="6" fill="#229488"/>
+                <circle cx="60" cy="60" r="2.5" fill="#5a5e61"/>
+              </svg>
+              <span class="gauge-tick" style="left:44px;top:-1px;">inv.</span>
+              <span class="gauge-tick" style="left:42px;bottom:-1px;">norm.</span>
+              <span class="gauge-tick" style="left:-2px;top:48px;">dextral</span>
+              <span class="gauge-tick" style="right:-4px;top:48px;">sinist.</span>
+            </div>
+            <div class="gauge-val" id="rakeGaugeVal">90°</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Presets — fallas típicas</h3>
+        <div class="preset-grid" id="presetGrid"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Ejes P / T</h3>
+        <div class="axes-grid">
+          <div class="axis-box p">
+            <div class="ax-name">EJE P (compresión)</div>
+            <div class="ax-vals"><span id="pAz">az —</span><span id="pPl">pl —</span></div>
+          </div>
+          <div class="axis-box t">
+            <div class="ax-name">EJE T (tensión)</div>
+            <div class="ax-vals"><span id="tAz">az —</span><span id="tPl">pl —</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Color</h3>
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="modeClassic" type="button">Clásico</button>
+          <button class="mode-btn" id="modeDepth" type="button">Por profundidad</button>
+        </div>
+        <div class="color-row"><span>Cuadrante compresivo</span><input type="color" id="compColor" value="#3ddbc4"></div>
+        <div class="color-row"><span>Cuadrante dilatacional</span><input type="color" id="diluColor" value="FFFFFF"></div>
+        <div class="depth-row" id="depthRow">
+          <div class="color-row"><span>Profundidad (km)</span><input type="number" id="depthNum" min="0" max="700" step="1" value="10" style="width:56px;background:var(--bg-panel-3);border:1px solid var(--line);color:var(--text);border-radius:3px;text-align:right;font-family:var(--mono);"></div>
+          <input type="range" id="depthSlider" min="0" max="700" step="1" value="10">
+          <div class="depth-legend" id="depthLegend"></div>
+          <div class="note">Paleta R-O-Y-G-B estilo gmt/seis · 0 km rojo → 700 km azul</div>
+        </div>
+        <div class="note" style="margin-top:14px;border-top:1px solid var(--line-soft);padding-top:12px;">
+          <div class="switch-row">
+            <span>🏖️ Fondo de playa</span>
+            <label class="switch"><input type="checkbox" id="beachToggle"><span class="track"><span class="knob"></span></span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="actions-row">
+          <button class="btn-dl" id="btnPng" type="button">↓ Descargar PNG</button>
+          <button class="btn-dl" id="btnReset" type="button">↺ Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        Aki &amp; Richards (1980) · proyección Schmidt, hemisferio inferior<br>
+        Agrega esta página a tu pantalla de inicio desde el menú del navegador
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var state = { strike:230, dip:60, rake:90, colorMode:'classic', compColor:'#3ddbc4', diluColor:'#15171a', depth:10 };
+
+  var presets = [
+    {name:'Normal pura', strike:0, dip:60, rake:-90},
+    {name:'Inversa pura', strike:0, dip:40, rake:90},
+    {name:'Rumbo sinistral', strike:0, dip:90, rake:0},
+    {name:'Rumbo dextral', strike:0, dip:90, rake:180},
+    {name:'Normal oblicua', strike:315, dip:55, rake:-135},
+    {name:'Inversa oblicua', strike:45, dip:45, rake:45},
+    {name:'Dip-slip vertical', strike:0, dip:90, rake:90, wide:true}
+  ];
+
+  // ---------- math core (unchanged Aki & Richards formulation) ----------
+  function d2r(d){ return d*Math.PI/180; }
+  function r2d(r){ return r*180/Math.PI; }
+  function norm360(a){ a = a % 360; if(a<0) a+=360; return a; }
+  function normRake(a){ a = ((a+180)%360+360)%360 - 180; return a; }
+
+  function momentTensor(strikeDeg, dipDeg, rakeDeg){
+    var phi=d2r(strikeDeg), delta=d2r(dipDeg), lambda=d2r(rakeDeg);
+    var sD=Math.sin(delta), cD=Math.cos(delta), s2D=Math.sin(2*delta), c2D=Math.cos(2*delta);
+    var sL=Math.sin(lambda), cL=Math.cos(lambda);
+    var sF=Math.sin(phi), cF=Math.cos(phi), s2F=Math.sin(2*phi), c2F=Math.cos(2*phi);
+    var Mxx = -(sD*cL*s2F + s2D*sL*sF*sF);
+    var Myy =  (sD*cL*s2F - s2D*sL*cF*cF);
+    var Mzz =  s2D*sL;
+    var Mxy =  (sD*cL*c2F + 0.5*s2D*sL*s2F);
+    var Mxz = -(cD*cL*cF + c2D*sL*sF);
+    var Myz = -(cD*cL*sF - c2D*sL*cF);
+    return {Mxx:Mxx, Myy:Myy, Mzz:Mzz, Mxy:Mxy, Mxz:Mxz, Myz:Myz};
+  }
+  function radiation(M, n, e, dwn){
+    return n*n*M.Mxx + e*e*M.Myy + dwn*dwn*M.Mzz + 2*n*e*M.Mxy + 2*n*dwn*M.Mxz + 2*e*dwn*M.Myz;
+  }
+  function jacobiEigen(Min){
+    var A = [[Min.Mxx,Min.Mxy,Min.Mxz],[Min.Mxy,Min.Myy,Min.Myz],[Min.Mxz,Min.Myz,Min.Mzz]];
+    var V = [[1,0,0],[0,1,0],[0,0,1]];
+    for(var sweep=0; sweep<40; sweep++){
+      var off=0;
+      for(var i=0;i<3;i++) for(var j=i+1;j<3;j++) off += A[i][j]*A[i][j];
+      if(off < 1e-14) break;
+      for(var p=0;p<3;p++){
+        for(var q=p+1;q<3;q++){
+          if(Math.abs(A[p][q]) < 1e-15) continue;
+          var theta = (A[q][q]-A[p][p]) / (2*A[p][q]);
+          var t = (theta>=0?1:-1) / (Math.abs(theta) + Math.sqrt(theta*theta+1));
+          if(theta===0) t=1;
+          var c = 1/Math.sqrt(t*t+1);
+          var s = t*c;
+          var tau = s/(1+c);
+          var h = t*A[p][q];
+          A[p][p] -= h; A[q][q] += h;
+          A[p][q] = 0; A[q][p] = 0;
+          for(var k=0;k<3;k++){
+            if(k!==p && k!==q){
+              var g = A[k][p], hh = A[k][q];
+              A[k][p] = g - s*(hh + tau*g); A[p][k] = A[k][p];
+              A[k][q] = hh + s*(g - tau*hh); A[q][k] = A[k][q];
+            }
+          }
+          for(k=0;k<3;k++){
+            var gv = V[k][p], hv = V[k][q];
+            V[k][p] = gv - s*(hv + tau*gv);
+            V[k][q] = hv + s*(gv - tau*hv);
+          }
+        }
+      }
+    }
+    return { values:[A[0][0],A[1][1],A[2][2]], vectors: V };
+  }
+  function axisFromVec(vN,vE,vD){
+    if(vD < 0){ vN=-vN; vE=-vE; vD=-vD; }
+    var pl = r2d(Math.asin(Math.max(-1,Math.min(1,vD))));
+    var az = norm360(r2d(Math.atan2(vE, vN)));
+    return {az:az, pl:pl, n:vN, e:vE, d:vD};
+  }
+  function computeAxes(M){
+    var eig = jacobiEigen(M);
+    var idx = [0,1,2].sort(function(a,b){ return eig.values[a]-eig.values[b]; });
+    var pIdx = idx[0], tIdx = idx[2];
+    var P = axisFromVec(eig.vectors[0][pIdx], eig.vectors[1][pIdx], eig.vectors[2][pIdx]);
+    var T = axisFromVec(eig.vectors[0][tIdx], eig.vectors[1][tIdx], eig.vectors[2][tIdx]);
+    return {P:P, T:T};
+  }
+  function classify(rakeIn){
+    var r = normRake(rakeIn);
+    if(r > -22.5 && r < 22.5) return 'Rumbo sinistral (izquierda)';
+    if(r > 157.5 || r < -157.5) return 'Rumbo dextral (derecha)';
+    if(r >= 22.5 && r <= 67.5) return 'Inversa oblicua · sinistral';
+    if(r > 67.5 && r < 112.5) return 'Falla inversa (thrust)';
+    if(r >= 112.5 && r <= 157.5) return 'Inversa oblicua · dextral';
+    if(r <= -22.5 && r >= -67.5) return 'Normal oblicua · dextral';
+    if(r < -67.5 && r > -112.5) return 'Falla normal';
+    return 'Normal oblicua · sinistral';
+  }
+  function hexToRgb(hex){
+    var h = hex.replace('#','');
+    if(h.length===3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var num = parseInt(h,16);
+    return [(num>>16)&255, (num>>8)&255, num&255];
+  }
+
+  // GMT/seis-style R-O-Y-G-B palette (ColorBrewer "Spectral" progression, same R->O->Y->G->B family)
+  var depthStops = [
+    {k:0,   c:[158,1,66]},
+    {k:70,  c:[213,62,79]},
+    {k:140, c:[244,109,67]},
+    {k:210, c:[253,174,97]},
+    {k:280, c:[254,224,139]},
+    {k:350, c:[255,255,191]},
+    {k:420, c:[230,245,152]},
+    {k:490, c:[171,221,164]},
+    {k:560, c:[102,194,165]},
+    {k:630, c:[50,136,189]},
+    {k:700, c:[94,79,162]}
+  ];
+  function depthToRgb(km){
+    km = Math.max(0, Math.min(700, km));
+    for(var i=0;i<depthStops.length-1;i++){
+      var a=depthStops[i], b=depthStops[i+1];
+      if(km >= a.k && km <= b.k){
+        var f = (km-a.k)/(b.k-a.k);
+        return [
+          Math.round(a.c[0]+(b.c[0]-a.c[0])*f),
+          Math.round(a.c[1]+(b.c[1]-a.c[1])*f),
+          Math.round(a.c[2]+(b.c[2]-a.c[2])*f)
+        ];
+      }
+    }
+    return depthStops[depthStops.length-1].c;
+  }
+  (function buildLegend(){
+    var el = document.getElementById('depthLegend');
+    depthStops.forEach(function(s){
+      var d = document.createElement('div');
+      d.style.background = 'rgb('+s.c[0]+','+s.c[1]+','+s.c[2]+')';
+      el.appendChild(d);
+    });
+  })();
+
+  // ---------- rendering ----------
+  var canvas = document.getElementById('beachball');
+  var ctx = canvas.getContext('2d');
+  var SIZE = canvas.width;
+
+  function drawBeachball(){
+    var M = momentTensor(state.strike, state.dip, state.rake);
+    var cx = SIZE/2, cy = SIZE/2;
+    var R = SIZE/2 - 6;
+    var img = ctx.createImageData(SIZE, SIZE);
+    var data = img.data;
+
+    var compRgb = state.colorMode==='depth' ? depthToRgb(state.depth) : hexToRgb(state.compColor);
+    var diluRgb = hexToRgb(state.diluColor);
+
+    for(var y=0; y<SIZE; y++){
+      for(var x=0; x<SIZE; x++){
+        var idx = (y*SIZE + x)*4;
+        var px = x - cx, py = cy - y;
+        var r = Math.sqrt(px*px + py*py);
+        if(r > R){ data[idx+3] = 0; continue; }
+        var rho = r / R;
+        var arg = Math.min(1, rho/Math.SQRT2);
+        var theta = 2*Math.asin(arg);
+        var psi = Math.atan2(px, py);
+        var sT = Math.sin(theta);
+        var nN = sT*Math.cos(psi);
+        var nE = sT*Math.sin(psi);
+        var nD = Math.cos(theta);
+        var val = radiation(M, nN, nE, nD);
+        var col = val >= 0 ? compRgb : diluRgb;
+        data[idx]=col[0]; data[idx+1]=col[1]; data[idx+2]=col[2]; data[idx+3]=255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(233,237,241,0.10)';
+    ctx.lineWidth = 1;
+    [15,30,45,60,75].forEach(function(thDeg){
+      var th = d2r(thDeg);
+      var rr = R * (Math.sqrt(2)*Math.sin(th/2)) / (Math.sqrt(2)*Math.sin(Math.PI/4));
+      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI*2); ctx.stroke();
+    });
+    for(var a=0; a<360; a+=30){
+      var rad = d2r(a);
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + R*Math.sin(rad), cy - R*Math.cos(rad)); ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(233,237,241,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+
+    var grad = ctx.createRadialGradient(cx-R*0.35, cy-R*0.4, R*0.1, cx, cy, R*1.05);
+    grad.addColorStop(0, 'rgba(255,255,255,0.10)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.20)');
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fillStyle = grad; ctx.fill();
+
+    // spin-zone hint ring (very faint)
+    ctx.beginPath();
+    ctx.arc(cx, cy, R*0.80, 0, Math.PI*2);
+    ctx.setLineDash([3,5]);
+    ctx.strokeStyle = 'rgba(61,219,196,0.14)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    var axes = computeAxes(M);
+    drawAxisMarker(axes.P, '#eceeef', 'P', cx, cy, R);
+    drawAxisMarker(axes.T, '#3ddbc4', 'T', cx, cy, R);
+    updateAxesPanel(axes);
+  }
+
+  function drawAxisMarker(axis, color, label, cx, cy, R){
+    var theta = Math.acos(Math.max(-1,Math.min(1,axis.d)));
+    var rho = Math.sqrt(2)*Math.sin(theta/2) / (Math.sqrt(2)*Math.sin(Math.PI/4));
+    var psi = d2r(axis.az);
+    var mx = cx + rho*R*Math.sin(psi);
+    var my = cy - rho*R*Math.cos(psi);
+    ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI*2); ctx.fillStyle = '#0b0c0d'; ctx.fill();
+    ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI*2); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '600 12px "IBM Plex Mono", monospace';
+    ctx.fillStyle = color; ctx.textAlign = 'center';
+    ctx.fillText(label, mx, my - 9);
+  }
+
+  function updateAxesPanel(axes){
+    document.getElementById('pAz').textContent = 'az ' + axes.P.az.toFixed(0) + '°';
+    document.getElementById('pPl').textContent = 'pl ' + axes.P.pl.toFixed(0) + '°';
+    document.getElementById('tAz').textContent = 'az ' + axes.T.az.toFixed(0) + '°';
+    document.getElementById('tPl').textContent = 'pl ' + axes.T.pl.toFixed(0) + '°';
+  }
+
+  // ---------- RAF-throttled redraw (keeps drag smooth regardless of raster cost) ----------
+  var rafPending = false;
+  function requestRedraw(){
+    if(rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(function(){ rafPending=false; drawBeachball(); });
+  }
+
+  // ---------- UI wiring ----------
+  var strikeSlider = document.getElementById('strikeSlider');
+  var strikeNum = document.getElementById('strikeNum');
+  var dipSlider = document.getElementById('dipSlider');
+  var dipNum = document.getElementById('dipNum');
+  var rakeSlider = document.getElementById('rakeSlider');
+  var rakeNum = document.getElementById('rakeNum');
+  var hudStrike = document.getElementById('hudStrike');
+  var hudDip = document.getElementById('hudDip');
+  var hudRake = document.getElementById('hudRake');
+  var hudFault = document.getElementById('hudFault');
+
+  function updateCheapUI(){
+    strikeSlider.value = state.strike; strikeNum.value = Math.round(state.strike);
+    dipSlider.value = state.dip; dipNum.value = Math.round(state.dip);
+    rakeSlider.value = state.rake; rakeNum.value = Math.round(state.rake);
+    hudStrike.textContent = Math.round(state.strike) + '°';
+    hudDip.textContent = Math.round(state.dip) + '°';
+    hudRake.textContent = Math.round(state.rake) + '°';
+    hudFault.textContent = classify(state.rake);
+    updateDipGauge(); updateRakeGauge();
+  }
+
+  function setStrike(v){ state.strike = norm360(v); updateCheapUI(); requestRedraw(); }
+  function setDip(v){ state.dip = Math.max(0,Math.min(90,v)); updateCheapUI(); requestRedraw(); }
+  function setRake(v){ state.rake = normRake(v); updateCheapUI(); requestRedraw(); }
+  function setMechanism(strike, dip, rake){
+    state.strike = norm360(strike);
+    state.dip = Math.max(0,Math.min(90,dip));
+    state.rake = normRake(rake);
+    updateCheapUI();
+    requestRedraw();
+  }
+
+  strikeSlider.addEventListener('input', function(){ setStrike(parseFloat(this.value)); });
+  strikeNum.addEventListener('change', function(){ setStrike(parseFloat(this.value)||0); });
+  dipSlider.addEventListener('input', function(){ setDip(parseFloat(this.value)); });
+  dipNum.addEventListener('change', function(){ setDip(parseFloat(this.value)||0); });
+  rakeSlider.addEventListener('input', function(){ setRake(parseFloat(this.value)); });
+  rakeNum.addEventListener('change', function(){ setRake(parseFloat(this.value)||0); });
+
+  // ---------- virtual trackball / arcball on the main ball ----------
+  // The pointer is projected onto a virtual sphere. The rotation that carries
+  // the grabbed point from its initial to its current position is applied to
+  // the fault-plane normal and slip vector. Strike, dip and rake are then
+  // recovered from those rotated vectors. This makes the interaction behave
+  // like grabbing a globe instead of controlling three hidden sliders.
+  (function(){
+    var dragging = false;
+    var pointerId = null;
+    var startArc = null;
+    var startNormal = null;
+    var startSlip = null;
+    var startStrike = 0;
+    var dragHint = document.getElementById('dragHint');
+
+    function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+    function dot3(a,b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+    function cross3(a,b){
+      return [
+        a[1]*b[2] - a[2]*b[1],
+        a[2]*b[0] - a[0]*b[2],
+        a[0]*b[1] - a[1]*b[0]
+      ];
+    }
+    function len3(v){ return Math.sqrt(dot3(v,v)); }
+    function norm3(v){
+      var L = len3(v) || 1;
+      return [v[0]/L, v[1]/L, v[2]/L];
+    }
+    function scale3(v,k){ return [v[0]*k, v[1]*k, v[2]*k]; }
+    function add3(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+
+    // Current Aki & Richards convention used by momentTensor(), in N/E/Down.
+    function vectorsFromSDR(strikeDeg, dipDeg, rakeDeg){
+      var phi=d2r(strikeDeg), delta=d2r(dipDeg), lambda=d2r(rakeDeg);
+      var sF=Math.sin(phi), cF=Math.cos(phi);
+      var sD=Math.sin(delta), cD=Math.cos(delta);
+      var sL=Math.sin(lambda), cL=Math.cos(lambda);
+
+      var n = [
+        -sD*sF,
+         sD*cF,
+        -cD
+      ];
+      var slip = [
+        cL*cF + sL*cD*sF,
+        cL*sF - sL*cD*cF,
+        -sL*sD
+      ];
+      return {n:n, slip:slip};
+    }
+
+    function sdrFromVectors(nIn, slipIn, fallbackStrike){
+      var n = norm3(nIn);
+      var slip = norm3(slipIn);
+
+      // Keep the plane in the canonical 0–90° dip representation. Flipping
+      // normal and slip together leaves the double-couple moment tensor intact.
+      if(n[2] > 0){ n=scale3(n,-1); slip=scale3(slip,-1); }
+
+      var dip = r2d(Math.acos(clamp(-n[2], -1, 1)));
+      var sinDip = Math.sin(d2r(dip));
+      var strike;
+
+      // Strike is undefined for a perfectly horizontal plane. Preserve the
+      // previous value at that singularity so the UI does not jump randomly.
+      if(Math.abs(sinDip) < 1e-7){
+        strike = fallbackStrike;
+      } else {
+        strike = norm360(r2d(Math.atan2(-n[0], n[1])));
+      }
+
+      var phi=d2r(strike), delta=d2r(dip);
+      var strikeDir = [Math.cos(phi), Math.sin(phi), 0];
+      var positiveRakeDir = [
+        Math.cos(delta)*Math.sin(phi),
+        -Math.cos(delta)*Math.cos(phi),
+        -Math.sin(delta)
+      ];
+      var cosRake = dot3(slip, strikeDir);
+      var sinRake = dot3(slip, positiveRakeDir);
+      var rake = normRake(r2d(Math.atan2(sinRake, cosRake)));
+      return {strike:strike, dip:dip, rake:rake};
+    }
+
+    // Project the pointer onto a unit virtual sphere. Screen right = East,
+    // screen up = North, screen-out = Up (-Down), then convert to N/E/Down.
+    function arcballPoint(clientX, clientY){
+      var rect = canvas.getBoundingClientRect();
+      var radius = Math.min(rect.width, rect.height)/2;
+      var x = (clientX - (rect.left + rect.width/2)) / radius;
+      var y = ((rect.top + rect.height/2) - clientY) / radius;
+      var r2 = x*x + y*y;
+      var z;
+
+      if(r2 <= 1){
+        z = Math.sqrt(1-r2);
+      } else {
+        // Clamp outside the visible ball to its rim. This makes a fast drag
+        // remain stable instead of exploding when the cursor leaves the circle.
+        var inv = 1/Math.sqrt(r2);
+        x *= inv; y *= inv; z = 0;
+      }
+      return norm3([y, x, -z]); // N, E, Down
+    }
+
+    // Rodrigues rotation that maps unit vector a onto unit vector b.
+    // Returned as axis + sin/cos so vectors can be rotated without matrices.
+    function rotationBetween(aIn,bIn){
+      var a=norm3(aIn), b=norm3(bIn);
+      var axisRaw = cross3(a,b);
+      var sinA = len3(axisRaw);
+      var cosA = clamp(dot3(a,b), -1, 1);
+
+      if(sinA < 1e-9){
+        if(cosA > 0) return {identity:true};
+        // 180°: pick a stable axis perpendicular to a.
+        var trial = Math.abs(a[0]) < 0.8 ? [1,0,0] : [0,1,0];
+        return {axis:norm3(cross3(a,trial)), sin:0, cos:-1, identity:false};
+      }
+      return {axis:scale3(axisRaw,1/sinA), sin:sinA, cos:cosA, identity:false};
+    }
+
+    function rotateVec(v, rot){
+      if(rot.identity) return [v[0],v[1],v[2]];
+      var k=rot.axis, c=rot.cos, s=rot.sin;
+      // Rodrigues: v*c + (k×v)*s + k(k·v)(1-c)
+      return add3(
+        add3(scale3(v,c), scale3(cross3(k,v),s)),
+        scale3(k, dot3(k,v)*(1-c))
+      );
+    }
+
+    function down(e){
+      if(e.button !== undefined && e.button !== 0) return;
+      dragging = true;
+      pointerId = e.pointerId;
+      startArc = arcballPoint(e.clientX, e.clientY);
+      var vectors = vectorsFromSDR(state.strike, state.dip, state.rake);
+      startNormal = vectors.n;
+      startSlip = vectors.slip;
+      startStrike = state.strike;
+      canvas.classList.add('dragging');
+      if(canvas.setPointerCapture && pointerId !== undefined){
+        try{ canvas.setPointerCapture(pointerId); }catch(err){}
+      }
+      if(dragHint) dragHint.classList.add('hidden');
+      e.preventDefault();
+    }
+
+    function move(e){
+      if(!dragging) return;
+      if(pointerId !== null && e.pointerId !== undefined && e.pointerId !== pointerId) return;
+      var currentArc = arcballPoint(e.clientX, e.clientY);
+      var rot = rotationBetween(startArc, currentArc);
+      var n2 = rotateVec(startNormal, rot);
+      var slip2 = rotateVec(startSlip, rot);
+      var sdr = sdrFromVectors(n2, slip2, startStrike);
+      setMechanism(sdr.strike, sdr.dip, sdr.rake);
+      e.preventDefault();
+    }
+
+    function up(e){
+      if(!dragging) return;
+      if(pointerId !== null && e && e.pointerId !== undefined && e.pointerId !== pointerId) return;
+      if(canvas.releasePointerCapture && pointerId !== null){
+        try{ canvas.releasePointerCapture(pointerId); }catch(err){}
+      }
+      dragging = false;
+      pointerId = null;
+      canvas.classList.remove('dragging');
+    }
+
+    canvas.addEventListener('pointerdown', down, {passive:false});
+    canvas.addEventListener('pointermove', move, {passive:false});
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
+    canvas.addEventListener('lostpointercapture', up);
+  })();
+
+  // ---------- gauges (dip / rake dials, unchanged interaction, relocated into drawer) ----------
+  var dipHand = document.getElementById('dipHand'), dipKnob = document.getElementById('dipKnob');
+  var rakeHand = document.getElementById('rakeHand'), rakeKnob = document.getElementById('rakeKnob');
+  var dipGaugeVal = document.getElementById('dipGaugeVal'), rakeGaugeVal = document.getElementById('rakeGaugeVal');
+
+  function updateDipGauge(){
+    var ang = d2r(state.dip);
+    var x = 60 + 48*Math.cos(ang), y = 60 - 48*Math.sin(ang);
+    dipHand.setAttribute('x2', x); dipHand.setAttribute('y2', y);
+    dipKnob.setAttribute('cx', x); dipKnob.setAttribute('cy', y);
+    dipGaugeVal.textContent = Math.round(state.dip) + '°';
+  }
+  function updateRakeGauge(){
+    var ang = d2r(state.rake);
+    var x = 60 + 48*Math.cos(ang), y = 60 - 48*Math.sin(ang);
+    rakeHand.setAttribute('x2', x); rakeHand.setAttribute('y2', y);
+    rakeKnob.setAttribute('cx', x); rakeKnob.setAttribute('cy', y);
+    rakeGaugeVal.textContent = Math.round(state.rake) + '°';
+  }
+  function wireGauge(el, onAngleDeg){
+    var dragging = false;
+    function fromEvent(e){
+      var p = e.touches ? e.touches[0] : e;
+      var rect = el.getBoundingClientRect();
+      var cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+      var dx = p.clientX - cx, dy = cy - p.clientY;
+      return r2d(Math.atan2(dy, dx));
+    }
+    function down(e){ dragging = true; onAngleDeg(fromEvent(e)); }
+    function move(e){ if(!dragging) return; onAngleDeg(fromEvent(e)); e.preventDefault && e.preventDefault(); }
+    function up(){ dragging = false; }
+    el.addEventListener('pointerdown', down);
+    window.addEventListener('pointermove', move, {passive:false});
+    window.addEventListener('pointerup', up);
+    el.addEventListener('touchstart', down, {passive:true});
+    el.addEventListener('touchmove', move, {passive:false});
+    el.addEventListener('touchend', up);
+  }
+  wireGauge(document.getElementById('dipGauge'), function(angDeg){ setDip(Math.max(0, Math.min(90, angDeg))); });
+  wireGauge(document.getElementById('rakeGauge'), function(angDeg){ setRake(angDeg); });
+
+  // ---------- presets ----------
+  var presetGrid = document.getElementById('presetGrid');
+  presets.forEach(function(p){
+    var b = document.createElement('button');
+    b.className = 'preset-btn' + (p.wide ? ' wide' : '');
+    b.type = 'button';
+    b.textContent = p.name;
+    b.addEventListener('click', function(){ animateTo(p.strike, p.dip, p.rake); });
+    presetGrid.appendChild(b);
+  });
+  function animateTo(ts, td, tr){
+    var s0=state.strike, d0=state.dip, r0=state.rake;
+    var ds = ((ts-s0+540)%360)-180;
+    var dr = normRake(tr) - r0;
+    if(dr>180) dr-=360; if(dr<-180) dr+=360;
+    var dd = td-d0;
+    var steps = 24, i=0;
+    function tick(){
+      i++;
+      var f = i/steps;
+      var ease = f<0.5 ? 2*f*f : -1+(4-2*f)*f;
+      setStrike(s0+ds*ease); setDip(d0+dd*ease); setRake(r0+dr*ease);
+      if(i<steps) requestAnimationFrame(tick);
+    }
+    tick();
+  }
+
+  // ---------- color controls ----------
+  var modeClassic = document.getElementById('modeClassic');
+  var modeDepth = document.getElementById('modeDepth');
+  var depthRow = document.getElementById('depthRow');
+  var compColorInput = document.getElementById('compColor');
+  var diluColorInput = document.getElementById('diluColor');
+  var depthNum = document.getElementById('depthNum');
+  var depthSlider = document.getElementById('depthSlider');
+
+  modeClassic.addEventListener('click', function(){
+    state.colorMode='classic'; modeClassic.classList.add('active'); modeDepth.classList.remove('active');
+    depthRow.classList.remove('show'); requestRedraw();
+  });
+  modeDepth.addEventListener('click', function(){
+    state.colorMode='depth'; modeDepth.classList.add('active'); modeClassic.classList.remove('active');
+    depthRow.classList.add('show'); requestRedraw();
+  });
+  compColorInput.addEventListener('input', function(){ state.compColor=this.value; requestRedraw(); });
+  diluColorInput.addEventListener('input', function(){ state.diluColor=this.value; requestRedraw(); });
+  depthNum.addEventListener('input', function(){ state.depth=parseFloat(this.value)||0; depthSlider.value=state.depth; requestRedraw(); });
+  depthSlider.addEventListener('input', function(){ state.depth=parseFloat(this.value); depthNum.value=state.depth; requestRedraw(); });
+
+  // ---------- beach easter egg ----------
+  document.getElementById('beachToggle').addEventListener('change', function(){
+    document.body.classList.toggle('beach-mode', this.checked);
+  });
+
+  // ---------- menu drawer ----------
+  var menuToggle = document.getElementById('menuToggle');
+  var drawer = document.getElementById('drawer');
+  var drawerBackdrop = document.getElementById('drawerBackdrop');
+  function openDrawer(){ drawer.classList.add('open'); drawerBackdrop.classList.add('open'); }
+  function closeDrawer(){ drawer.classList.remove('open'); drawerBackdrop.classList.remove('open'); }
+  menuToggle.addEventListener('click', function(){
+    drawer.classList.contains('open') ? closeDrawer() : openDrawer();
+  });
+  drawerBackdrop.addEventListener('click', closeDrawer);
+
+  // ---------- actions ----------
+  document.getElementById('btnPng').addEventListener('click', function(){
+    var link = document.createElement('a');
+    link.download = 'mecanismo_focal_' + Math.round(state.strike) + '_' + Math.round(state.dip) + '_' + Math.round(state.rake) + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+  document.getElementById('btnReset').addEventListener('click', function(){ animateTo(230, 60, 90); });
+
+  // ---------- init ----------
+  updateCheapUI();
+  drawBeachball();
+
+})();
+</script>
+</body>
+</html>
